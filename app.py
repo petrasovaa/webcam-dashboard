@@ -13,13 +13,22 @@ csvdata = pd.read_csv('export.csv', parse_dates=['isodate'])
 server = flask.Flask(__name__)
 app = dash.Dash(__name__, sharing=True, server=server, csrf_protect=False)
 
-
+app.title = "Health Matters"
 app.css.append_css({
     'external_url': 'https://codepen.io/chriddyp/pen/bWLwgP.css'
 })
 
 parks = csvdata['park'].unique()
 initial_date = dt(2017, 6, 1)
+park_names = {'Br': 'Braswell Park',
+              'Cl': 'Clark Park',
+              'Ga': 'Garysburg Community Park',
+              'Ri': 'River FallsPark',
+              'Ve': 'Veterans Memorial Park',
+              'Wo': 'Woodland Park',
+              'Pl': 'Tarboro Parking Lot Project',
+              '4H': '4-H Rural Life Center'
+             }
 
 app.layout = \
     html.Div([
@@ -28,7 +37,7 @@ app.layout = \
             html.Div([
                 html.Div([html.Label('Park:'),
                           dcc.Dropdown(id='park-dropdown',
-                                       options=sorted([{'label': park,
+                                       options=sorted([{'label': park_names[park],
                                                         'value': park} for park in parks]))
                           ], className="three columns"),
                 html.Div([html.Label('Camera:'),
