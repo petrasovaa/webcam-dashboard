@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import os
+import glob
 import dash
 import flask
 import dash_core_components as dcc
@@ -29,6 +31,12 @@ park_names = {'Br': 'Braswell Park',
               'Pl': 'Tarboro Parking Lot Project',
               '4H': '4-H Rural Life Center'
              }
+
+cameras_dir = './resources/'
+cameras = [os.path.basename(img) for img in glob.glob(cameras_dir + '*.jpg')]
+static_image_route = '/static/'
+
+
 
 app.layout = \
     html.Div([
@@ -73,6 +81,10 @@ app.layout = \
                 html.Div([html.A('Download filtered data as CSV', id='download-link', download="rawdata.csv",  href="",  target="_blank")],
                          className="two columns",
                          style={'padding-top': '20px'}),
+                ], className="row"),
+            html.Div([
+                html.Div([html.Img(id='camera-image', style={'width': '100%'})
+                          ], className="four columns", style={'padding-right': '5px', 'padding-left': '20px', 'padding-bottom': '30px'}),
                 ], className="row"),
         ], style={'background-color': 'WhiteSmoke'}),
         html.Div([
@@ -271,6 +283,30 @@ def set_cameras_value(available_options):
     if available_options:
         return available_options[0]['value']
     return None
+
+
+@app.callback(
+    dash.dependencies.Output('camera-image', 'src'),
+    [dash.dependencies.Input('park-dropdown', 'value'),
+     dash.dependencies.Input('camera-dropdown', 'value')])
+def update_image_src(parkv, camerav):
+    for each in cameras:
+        name = each.split('.')[0]
+        try:
+            county, city, park, camera = name.split('_')
+            if park == parkv and camera == camerav:
+                return os.path.join(static_image_route, each)
+        except ValueError:
+            pass
+    return os.path.join(static_image_route, 'default_image.jpg')
+
+
+@app.server.route('{}<image_path>.jpg'.format(static_image_route))
+def serve_image(image_path):
+    image_name = '{}.jpg'.format(image_path)
+    if image_name not in cameras:
+        raise Exception('"{}" is excluded from the allowed static files'.format(image_path))
+    return flask.send_from_directory(cameras_dir, image_name)
 
 
 if __name__ == '__main__':
