@@ -12,6 +12,7 @@ from datetime import datetime as dt
 import urllib
 
 csvdata = pd.read_csv('export.csv', parse_dates=['isodate'])
+csvdata.set_index('isodate', drop=False, inplace=True)
 server = flask.Flask(__name__)
 app = dash.Dash(__name__, sharing=True, server=server, csrf_protect=False)
 
@@ -94,6 +95,10 @@ app.layout = \
                 html.Div([dcc.Graph(id='plot-aggreg-day')],  className="six columns", style={'padding-left': '5px'}),
                 html.Div([dcc.Graph(id='plot-aggreg-hour')],  className="six columns", style={'padding-left': '5px'})
                  ], className="row", style={'padding-bottom': '20px', 'padding-left': '5px'}),
+            html.Div([
+                html.Div([dcc.Graph(id='plot-aggreg-day-avg')],  className="six columns", style={'padding-left': '5px'}),
+                html.Div([dcc.Graph(id='plot-aggreg-hour-avg')],  className="six columns", style={'padding-left': '5px'})
+                 ], className="row", style={'padding-bottom': '20px', 'padding-left': '5px'}),
             ])
         ])
 
@@ -124,14 +129,19 @@ def create_time_series(dff, axis_type='Linear', title='Counts'):
     }
 
 
-def create_aggr_weekday(df):
+def create_aggr_weekday(df, method):
+    title = ''
+    if method == 'count':
+        title = "Number of visitors by day of week"
+    elif method == 'avg':
+        title = "Average number of visitors by day of week"
     return {
         'data': [go.Bar(
             x=df['weekday'],
             y=df['count']
         )],
         'layout': {
-            'title': "Number of visitors by day of week",
+            'title': title,
             'height': 225,
             'margin': {'l': 30, 'b': 30, 'r': 20, 't': 50},
             'annotations': [{
@@ -148,7 +158,12 @@ def create_aggr_weekday(df):
     }
 
 
-def create_aggr_hour(df):
+def create_aggr_hour(df, method):
+    title = ''
+    if method == 'count':
+        title = "Number of visitors by hour"
+    elif method == 'avg':
+        title = "Average number of visitors by hour"
     return {
         'data': [go.Bar(
             x=df['hour'],
@@ -156,7 +171,7 @@ def create_aggr_hour(df):
             marker=dict(color='rgb(249,127,46)')
         )],
         'layout': {
-            'title': "Number of visitors by hour",
+            'title': title,
             'height': 225,
             'margin': {'l': 30, 'b': 30, 'r': 20, 't': 50},
             'annotations': [{
@@ -183,7 +198,7 @@ def create_aggr_hour(df):
      dash.dependencies.Input('camera-dropdown', 'value')])
 def update_download_link(weekdays, hour, start_date, end_date, park, camera):
     df = csvdata[(csvdata['park'] == park) & (csvdata['camera'] == camera)]
-    df = df[(df['isodate'] > start_date) & (df['isodate'] < end_date)]
+    df = df.loc[start_date:end_date]
     df = df[df['weekday'].isin(weekdays)]
     df = df[(df['hour'] >= hour[0]) & (df['hour'] < hour[1])]
     csv_string = df.to_csv(index=False, encoding='utf-8')
@@ -202,11 +217,11 @@ def update_download_link(weekdays, hour, start_date, end_date, park, camera):
      dash.dependencies.Input('camera-dropdown', 'value')])
 def update_aggr_hour(weekdays, hour, start_date, end_date, park, camera):
     df = csvdata[(csvdata['park'] == park) & (csvdata['camera'] == camera)]
-    df = df[(df['isodate'] > start_date) & (df['isodate'] < end_date)]
+    df = df.loc[start_date:end_date]
     df = df[df['weekday'].isin(weekdays)]
     df = df[(df['hour'] >= hour[0]) & (df['hour'] < hour[1])]
     df = df.groupby(pd.Grouper(key='hour')).sum().reset_index()
-    return create_aggr_hour(df)
+    return create_aggr_hour(df, method='count')
 
 
 # all filter callback to redraw overview figure
@@ -220,11 +235,52 @@ def update_aggr_hour(weekdays, hour, start_date, end_date, park, camera):
      dash.dependencies.Input('camera-dropdown', 'value')])
 def update_aggr_weekday(weekdays, hour, start_date, end_date, park, camera):
     df = csvdata[(csvdata['park'] == park) & (csvdata['camera'] == camera)]
-    df = df[(df['isodate'] > start_date) & (df['isodate'] < end_date)]
+    df = df.loc[start_date:end_date]
     df = df[df['weekday'].isin(weekdays)]
     df = df[(df['hour'] >= hour[0]) & (df['hour'] < hour[1])]
     df = df.groupby(pd.Grouper(key='weekday')).sum().reset_index()
-    return create_aggr_weekday(df)
+    return create_aggr_weekday(df, method='count')
+
+
+@app.callback(
+    dash.dependencies.Output('plot-aggreg-hour-avg', 'figure'),
+    [dash.dependencies.Input('weekdays_checkbox', 'values'),
+     dash.dependencies.Input('hour-filter', 'value'),
+     dash.dependencies.Input('date-picker-range', 'start_date'),
+     dash.dependencies.Input('date-picker-range', 'end_date'),
+     dash.dependencies.Input('park-dropdown', 'value'),
+     dash.dependencies.Input('camera-dropdown', 'value')])
+def update_aggr_hour_avg(weekdays, hour, start_date, end_date, park, camera):
+    df = csvdata[(csvdata['park'] == park) & (csvdata['camera'] == camera)]
+    df = df.loc[start_date:end_date]
+    df = df[df['weekday'].isin(weekdays)]
+    df = df[(df['hour'] >= hour[0]) & (df['hour'] < hour[1])]
+    df = df.resample('1h').sum()
+    df = df.groupby(df.index.hour)['count'].mean().reset_index()
+    df['hour'] = df['index']
+    df = df[df['count'].notnull()]
+    return create_aggr_hour(df, method='avg')
+
+
+# all filter callback to redraw overview figure
+@app.callback(
+    dash.dependencies.Output('plot-aggreg-day-avg', 'figure'),
+    [dash.dependencies.Input('weekdays_checkbox', 'values'),
+     dash.dependencies.Input('hour-filter', 'value'),
+     dash.dependencies.Input('date-picker-range', 'start_date'),
+     dash.dependencies.Input('date-picker-range', 'end_date'),
+     dash.dependencies.Input('park-dropdown', 'value'),
+     dash.dependencies.Input('camera-dropdown', 'value')])
+def update_aggr_weekday_avg(weekdays, hour, start_date, end_date, park, camera):
+    df = csvdata[(csvdata['park'] == park) & (csvdata['camera'] == camera)]
+    df = df.loc[start_date:end_date]
+    df = df[df['weekday'].isin(weekdays)]
+    df = df[(df['hour'] >= hour[0]) & (df['hour'] < hour[1])]
+    df = df.resample('1d').sum()
+    df = df.groupby(df.index.dayofweek)['count'].mean().reset_index()
+    df['weekday'] = df['index'] + 1
+    return create_aggr_weekday(df, method='avg')
+
 
 
 # all filter callback to redraw overview figure
@@ -238,7 +294,7 @@ def update_aggr_weekday(weekdays, hour, start_date, end_date, park, camera):
      dash.dependencies.Input('camera-dropdown', 'value')])
 def update_overview(weekdays, hour, start_date, end_date, park, camera):
     df = csvdata[(csvdata['park'] == park) & (csvdata['camera'] == camera)]
-    df = df[(df['isodate'] > start_date) & (df['isodate'] < end_date)]
+    df = df.loc[start_date:end_date]
     df = df[df['weekday'].isin(weekdays)]
     df = df[(df['hour'] >= hour[0]) & (df['hour'] < hour[1])]
     df = df.groupby(pd.Grouper(key='isodate', freq='D')).sum().reset_index()
