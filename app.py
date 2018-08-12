@@ -107,6 +107,7 @@ app.config['supress_callback_exceptions'] = True
 
 
 def create_time_series(dff, axis_type='Linear', title='Counts'):
+    shapes = highlight_intervals(dff)
     return {
         'data': [go.Bar(
             x=dff['isodate'],
@@ -124,9 +125,31 @@ def create_time_series(dff, axis_type='Linear', title='Counts'):
                 'text': title
             }],
             'yaxis': {'type': 'linear' if axis_type == 'Linear' else 'log'},
-            'xaxis': {'showgrid': False, 'ticks': 'outside'}
+            'xaxis': {'showgrid': False, 'ticks': 'outside'},
+            'shapes': shapes
         }
     }
+
+
+def highlight_intervals(df):
+    from datetime import timedelta as td
+    df = df[df['count'].isnull()]
+    ranges = []
+    isodates = [row['isodate'] for index, row in df.iterrows()]
+    if not isodates:
+        return []
+    last = isodates[0]
+    for i in range(len(isodates) - 1):
+        if isodates[i + 1] - isodates[i] > td(days=1):
+            ranges.append((last, isodates[i]))
+            last = isodates[i + 1]
+    ranges.append((last, isodates[i + 1]))
+    shapes = []
+    for each in ranges:
+        shapes.append({'type': 'rect', 'xref': 'x', 'yref': 'paper', 'y0': 0, 'y1': 1,
+                       'fillcolor': '#FF0000', 'opacity': 0.1, 'line': {'width': 0},
+                       'x0': each[0], 'x1': each[1]})
+    return shapes
 
 
 def create_aggr_weekday(df, method):
