@@ -9,6 +9,7 @@ import dash_html_components as html
 import pandas as pd
 import plotly.graph_objs as go
 from datetime import datetime as dt
+from datetime import timedelta as td
 import urllib
 
 csvdata = pd.read_csv('export.csv', parse_dates=['isodate'])
@@ -116,8 +117,7 @@ app.layout = \
 app.config['supress_callback_exceptions'] = True
 
 
-def create_time_series(dff, axis_type='Linear', title='Counts'):
-    shapes, annotations = highlight_intervals(dff)
+def create_time_series(dff, shapes, annotations, axis_type='Linear', title='Counts'):
     return {
         'data': [go.Bar(
             x=dff['isodate'],
@@ -137,8 +137,6 @@ def create_time_series(dff, axis_type='Linear', title='Counts'):
 
 
 def highlight_intervals(df):
-    from datetime import timedelta as td
-    df = df[df['count'].isnull()]
     ranges = []
     isodates = [row['isodate'] for index, row in df.iterrows()]
     if not isodates:
@@ -274,12 +272,14 @@ def update_aggr_weekday(weekdays, hour, start_date, end_date, park, camera):
      dash.dependencies.Input('camera-dropdown', 'value')])
 def update_aggr_hour_avg(weekdays, hour, start_date, end_date, park, camera):
     df = csvdata[(csvdata['park'] == park) & (csvdata['camera'] == camera)]
+    highlight_intervals(df)
     df = df.loc[start_date:end_date]
     df = df[df['weekday'].isin(weekdays)]
     df = df[(df['hour'] >= hour[0]) & (df['hour'] < hour[1])]
     df = df.resample('1h').sum()
+    df = df[df['year'] != 0]  # filter no data values, count is always 0, no NaN
     df = df.groupby(df.index.hour)['count'].mean().reset_index()
-    df['hour'] = df['index']
+    df['hour'] = df['isodate']
     df = df[df['count'].notnull()]
     return create_aggr_hour(df, method='avg')
 
@@ -299,8 +299,9 @@ def update_aggr_weekday_avg(weekdays, hour, start_date, end_date, park, camera):
     df = df[df['weekday'].isin(weekdays)]
     df = df[(df['hour'] >= hour[0]) & (df['hour'] < hour[1])]
     df = df.resample('1d').sum()
+    df = df[df['year'] != 0]  # filter no data values, count is always 0, no NaN
     df = df.groupby(df.index.dayofweek)['count'].mean().reset_index()
-    df['weekday'] = df['index'] + 1
+    df['weekday'] = df['isodate'] + 1
     return create_aggr_weekday(df, method='avg')
 
 
@@ -316,11 +317,18 @@ def update_aggr_weekday_avg(weekdays, hour, start_date, end_date, park, camera):
      dash.dependencies.Input('camera-dropdown', 'value')])
 def update_overview(weekdays, hour, start_date, end_date, park, camera):
     df = csvdata[(csvdata['park'] == park) & (csvdata['camera'] == camera)]
-    df = df.loc[start_date:end_date]
-    df = df[df['weekday'].isin(weekdays)]
-    df = df[(df['hour'] >= hour[0]) & (df['hour'] < hour[1])]
+
+    dff = df.loc[start_date:end_date]
+    dff = dff[dff['weekday'].isin(weekdays)]
+    dff = dff[(dff['hour'] >= hour[0]) & (dff['hour'] < hour[1])]
+    dff = dff.groupby(pd.Grouper(key='isodate', freq='D')).sum().reset_index()
+    dff = dff[dff['year'] != 0]  # filter no data values, count is always 0, no NaN
+
+    # separately compute 'no image' time gaps, without filtering
     df = df.groupby(pd.Grouper(key='isodate', freq='D')).sum().reset_index()
-    return create_time_series(df)
+    shapes, annotations = highlight_intervals(df[df['year'] == 0])
+
+    return create_time_series(dff, shapes, annotations)
 
 
 # set start date based on the camera
