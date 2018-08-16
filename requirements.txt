@@ -3,5 +3,5 @@ dash-renderer
 dash-html-components
 dash-core-components
 plotly
-pandas
+pandas>=0.23.3
 gunicorn
