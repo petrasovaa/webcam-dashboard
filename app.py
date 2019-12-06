@@ -12,7 +12,7 @@ from datetime import datetime as dt
 from datetime import timedelta as td
 import urllib
 
-csvdata = pd.read_csv('export.csv', parse_dates=['isodate'])
+csvdata = pd.read_csv('export.csv', parse_dates=['isodate'], engine='python')
 csvdata.set_index('isodate', drop=False, inplace=True)
 server = flask.Flask(__name__)
 app = dash.Dash(__name__, sharing=True, server=server, csrf_protect=False)
