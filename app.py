@@ -10,17 +10,16 @@ import pandas as pd
 import plotly.graph_objs as go
 from datetime import datetime as dt
 from datetime import timedelta as td
-import urllib
+import urllib.parse
 
-csvdata = pd.read_csv('export.csv', parse_dates=['isodate'], engine='python')
+csvdata = pd.read_csv('./resources/export.csv', parse_dates=['isodate'], engine='python')
 csvdata.set_index('isodate', drop=False, inplace=True)
 server = flask.Flask(__name__)
-app = dash.Dash(__name__, sharing=True, server=server, csrf_protect=False)
+external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+app = dash.Dash(__name__, server=server, external_stylesheets=external_stylesheets)
 
 app.title = "Health Matters"
-app.css.append_css({
-    'external_url': 'https://codepen.io/chriddyp/pen/bWLwgP.css'
-})
+
 
 parks = csvdata['park'].unique()
 initial_date = dt(2017, 6, 1)
@@ -53,13 +52,13 @@ app.layout = \
                             html.Div([html.Label('Park:'),
                                       dcc.Dropdown(id='park-dropdown',
                                                    options=sorted([{'label': park_names[park],
-                                                                    'value': park} for park in parks]))
+                                                             'value': park} for park in parks], key=lambda k: k['label']))
                                       ], className="six columns"),
 
                             html.Div([html.Label('Camera:'),
                                       dcc.Dropdown(id='camera-dropdown',
                                                    options=sorted([{'label': camera,
-                                                                    'value': camera} for camera in parks]))
+                                                                    'value': camera} for camera in parks], key=lambda k: k['label']))
                                       ], className="three columns"),
                         ], className="row"),
                         html.Div([
@@ -76,7 +75,7 @@ app.layout = \
                                                              {'label': 'Wed', 'value': 3}, {'label': 'Thu', 'value': 4},
                                                              {'label': 'Fri', 'value': 5}, {'label': 'Sat', 'value': 6},
                                                              {'label': 'Sun', 'value': 7}],
-                                                    values=list(range(1, 8)),
+                                                    value=list(range(1, 8)),
                                                     labelStyle={'display': 'inline-block', 'padding-right': '10px'},
                                                     style={'padding-top': '10px', 'padding-bottom': '10px'})
                                       ], className="seven columns"),
@@ -114,7 +113,7 @@ app.layout = \
         ])
 
 
-app.config['supress_callback_exceptions'] = True
+app.config['suppress_callback_exceptions'] = True
 
 
 def create_time_series(dff, shapes, annotations, axis_type='Linear', title='Counts'):
@@ -177,7 +176,7 @@ def create_aggr_weekday(df, method):
             'height': 225,
             'margin': {'l': 30, 'b': 30, 'r': 20, 't': 50},
             'yaxis': {'type': 'linear'},
-            'xaxis': {'showgrid': False, 'tickvals': range(1, 8), 'ticks': 'outside',
+            'xaxis': {'showgrid': False, 'tickvals': list(range(1, 8)), 'ticks': 'outside',
                       'ticktext': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
                       }
         }
@@ -210,7 +209,7 @@ def create_aggr_hour(df, method):
 
 @app.callback(
     dash.dependencies.Output('download-link', 'href'),
-    [dash.dependencies.Input('weekdays_checkbox', 'values'),
+    [dash.dependencies.Input('weekdays_checkbox', 'value'),
      dash.dependencies.Input('hour-filter', 'value'),
      dash.dependencies.Input('date-picker-range', 'start_date'),
      dash.dependencies.Input('date-picker-range', 'end_date'),
@@ -222,14 +221,14 @@ def update_download_link(weekdays, hour, start_date, end_date, park, camera):
     df = df[df['weekday'].isin(weekdays)]
     df = df[(df['hour'] >= hour[0]) & (df['hour'] < hour[1])]
     csv_string = df.to_csv(index=False, encoding='utf-8')
-    csv_string = "data:text/csv;charset=utf-8," + urllib.quote(csv_string)
+    csv_string = "data:text/csv;charset=utf-8," + urllib.parse.quote(csv_string)
     return csv_string
 
 
 # all filter callback to redraw overview figure
 @app.callback(
     dash.dependencies.Output('plot-aggreg-hour', 'figure'),
-    [dash.dependencies.Input('weekdays_checkbox', 'values'),
+    [dash.dependencies.Input('weekdays_checkbox', 'value'),
      dash.dependencies.Input('hour-filter', 'value'),
      dash.dependencies.Input('date-picker-range', 'start_date'),
      dash.dependencies.Input('date-picker-range', 'end_date'),
@@ -247,7 +246,7 @@ def update_aggr_hour(weekdays, hour, start_date, end_date, park, camera):
 # all filter callback to redraw overview figure
 @app.callback(
     dash.dependencies.Output('plot-aggreg-day', 'figure'),
-    [dash.dependencies.Input('weekdays_checkbox', 'values'),
+    [dash.dependencies.Input('weekdays_checkbox', 'value'),
      dash.dependencies.Input('hour-filter', 'value'),
      dash.dependencies.Input('date-picker-range', 'start_date'),
      dash.dependencies.Input('date-picker-range', 'end_date'),
@@ -264,7 +263,7 @@ def update_aggr_weekday(weekdays, hour, start_date, end_date, park, camera):
 
 @app.callback(
     dash.dependencies.Output('plot-aggreg-hour-avg', 'figure'),
-    [dash.dependencies.Input('weekdays_checkbox', 'values'),
+    [dash.dependencies.Input('weekdays_checkbox', 'value'),
      dash.dependencies.Input('hour-filter', 'value'),
      dash.dependencies.Input('date-picker-range', 'start_date'),
      dash.dependencies.Input('date-picker-range', 'end_date'),
@@ -287,7 +286,7 @@ def update_aggr_hour_avg(weekdays, hour, start_date, end_date, park, camera):
 # all filter callback to redraw overview figure
 @app.callback(
     dash.dependencies.Output('plot-aggreg-day-avg', 'figure'),
-    [dash.dependencies.Input('weekdays_checkbox', 'values'),
+    [dash.dependencies.Input('weekdays_checkbox', 'value'),
      dash.dependencies.Input('hour-filter', 'value'),
      dash.dependencies.Input('date-picker-range', 'start_date'),
      dash.dependencies.Input('date-picker-range', 'end_date'),
@@ -309,7 +308,7 @@ def update_aggr_weekday_avg(weekdays, hour, start_date, end_date, park, camera):
 # all filter callback to redraw overview figure
 @app.callback(
     dash.dependencies.Output('x-time-series', 'figure'),
-    [dash.dependencies.Input('weekdays_checkbox', 'values'),
+    [dash.dependencies.Input('weekdays_checkbox', 'value'),
      dash.dependencies.Input('hour-filter', 'value'),
      dash.dependencies.Input('date-picker-range', 'start_date'),
      dash.dependencies.Input('date-picker-range', 'end_date'),
@@ -317,7 +316,6 @@ def update_aggr_weekday_avg(weekdays, hour, start_date, end_date, park, camera):
      dash.dependencies.Input('camera-dropdown', 'value')])
 def update_overview(weekdays, hour, start_date, end_date, park, camera):
     df = csvdata[(csvdata['park'] == park) & (csvdata['camera'] == camera)]
-
     dff = df.loc[start_date:end_date]
     dff = dff[dff['weekday'].isin(weekdays)]
     dff = dff[(dff['hour'] >= hour[0]) & (dff['hour'] < hour[1])]
@@ -359,7 +357,7 @@ def set_date_end(park, camera):
     dash.dependencies.Output('camera-dropdown', 'options'),
     [dash.dependencies.Input('park-dropdown', 'value')])
 def set_camera_options(selected_park):
-    return sorted([{'label': i, 'value': i} for i in csvdata[csvdata['park'] == selected_park]['camera'].unique()])
+    return sorted([{'label': i, 'value': i} for i in csvdata[csvdata['park'] == selected_park]['camera'].unique()], key=lambda k: k['label'])
 
 
 @app.callback(
